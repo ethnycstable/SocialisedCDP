@@ -18,7 +18,7 @@ contract DummyOracle is IOracle, Ownable {
       * @notice Set a manual price.
       * @param _price Price to set
       */
-    function setManualPrice(uint256 _price) public onlyOwner {
+    function setPrice(uint256 _price) public onlyOwner {
         emit SetManualPrice(manualPrice, _price);
         manualPrice = _price;
     }

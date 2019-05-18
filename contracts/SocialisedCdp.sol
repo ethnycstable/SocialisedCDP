@@ -79,7 +79,7 @@ contract SocialisedCdp {
 
     // Calculate amount of credit for a particular account (CDP)
     function accumulatedCredit(address _account) public view returns (int256) {
-        return correctionPerUsd.mul(_toInt256(totalUsdOwed(_account)))
+        return correctionPerUsd.mul(_toInt256(usdWithdrawn[_account]))
             .add(usdCorrections[_account]) / magnitude;
     }
 
@@ -161,20 +161,21 @@ contract SocialisedCdp {
         submittedBids[_account][msg.sender] = 0;
     }
 
-    function _checkLiquidity(address _account) internal returns (bool) {
+    function _checkLiquidity(address _account) public view returns (bool) {
         //Check whether account is still liquid
         uint256 usdValueOfEth = ethCollateral[_account].mul(_getUsdPrice()).div(10**18);
-        return usdValueOfEth.mul(liquidationRatio).div(10**18) >= usdWithdrawn[_account];
+        return usdValueOfEth.mul(liquidationRatio).div(10**18) >= totalUsdOwed(_account);
     }
 
-    function _availableCredit(address _account) internal returns (uint256) {
+    function _availableCredit(address _account) public view returns (uint256) {
         //Throws if credit < 0;
         uint256 usdValueOfEth = ethCollateral[_account].mul(_getUsdPrice()).div(10**18);
-        return usdValueOfEth.mul(liquidationRatio).div(10**18).sub(usdWithdrawn[_account]);
+        return usdValueOfEth.mul(liquidationRatio).div(10**18).sub(totalUsdOwed(_account));
     }
 
-    function _getUsdPrice() internal returns (uint256) {
-        return oracle.getPrice();
+    function _getUsdPrice() internal view returns (uint256) {
+        return 200*10**18;
+        /* return oracle.getPrice(); */
     }
 
     function _mint(address _account, uint256 _amount) internal {

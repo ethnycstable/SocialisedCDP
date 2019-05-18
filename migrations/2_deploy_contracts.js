@@ -8,5 +8,7 @@ module.exports = async function(deployer) {
     await deployer.deploy(DummyOracle);
     await deployer.deploy(SocialisedCdp, DummyOracle.address, UsdToken.address);
     let usdToken = await UsdToken.deployed();
+    let oracle = await DummyOracle.deployed();
     await usdToken.setCdp(SocialisedCdp.address);
+    await oracle.setPrice(200*10**18);
 };
