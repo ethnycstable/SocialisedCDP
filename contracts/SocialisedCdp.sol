@@ -65,23 +65,36 @@ contract SocialisedCdp {
         require(usdToken.totalSupply() > 0);
         if (_amount >= 0) {
             correctionPerUsd = correctionPerUsd.add(
-              _amount.mul(magnitude) / _toInt256Safe(usdToken.totalSupply())
+              _amount.mul(magnitude) / _toInt256(usdToken.totalSupply())
             );
         } else {
             correctionPerUsd = correctionPerUsd.sub(
-              _amount.mul(magnitude) / _toInt256Safe(usdToken.totalSupply())
+              _amount.mul(magnitude) / _toInt256(usdToken.totalSupply())
             );
         }
     }
 
+    function totalUsdOwed(address _account) public view returns (uint256) {
+        if (accumulatedCredit(_account) >= 0) {
+            return usdWithdrawn[_account].sub(_toUint256(accumulatedCredit(_account)));
+        } else {
+            return usdWithdrawn[_account].add(_toUint256(accumulatedCredit(_account)));
+        }
+    }
+
+    function accumulatedCredit(address _account) public view returns (int256) {
+        return correctionPerUsd.mul(_toInt256(totalUsdOwed(_account)))
+            .add(usdCorrections[_account]) / magnitude;
+    }
+
     function depositEth() payable external {
-        //Don't allow deposits on accounts with open bids
+        //Don't allow deposits on accounts that have been liquidated
         require(bidStart[msg.sender] == 0);
         ethCollateral[msg.sender] += msg.value;
     }
 
     function depositUsd(uint256 _amount) external {
-        //Don't allow deposits on accounts with open bids
+        //Don't allow deposits on accounts that have been liquidated
         require(bidStart[msg.sender] == 0);
         //Will revert if transfer fails, or we try and pay back more than we've borrowed
         usdWithdrawn[msg.sender] = usdWithdrawn[msg.sender].sub(_amount);
@@ -90,14 +103,14 @@ contract SocialisedCdp {
     }
 
     function withdrawEth(uint256 _amount) external {
-        //Don't allow withdrawals on accounts with open bids
+        //Don't allow withdrawals on accounts that have been liquidated
         require(bidStart[msg.sender] == 0);
         ethCollateral[msg.sender] = ethCollateral[msg.sender].sub(_amount);
         require(_checkLiquidity(msg.sender));
     }
 
     function withdrawUsd(uint256 _amount) external {
-        //Don't allow withdrawals on accounts with open bids
+        //Don't allow withdrawals on accounts that have been liquidated
         require(bidStart[msg.sender] == 0);
         usdWithdrawn[msg.sender] = usdWithdrawn[msg.sender].add(_amount);
         require(_checkLiquidity(msg.sender));
@@ -129,7 +142,7 @@ contract SocialisedCdp {
         require(bidStart[_account].add(auctionLength) < now.add(auctionLength));
 
         // Calculate liquidity difference
-        int256 credit = _toInt256Safe(submittedBids[_account][msg.sender]).sub(_toInt256Safe(usdWithdrawn[_account]));
+        int256 credit = _toInt256(submittedBids[_account][msg.sender]).sub(_toInt256(usdWithdrawn[_account]));
         msg.sender.transfer(ethCollateral[_account]);
         submittedBids[_account][msg.sender] = 0;
         ethCollateral[_account] = 0;
@@ -161,17 +174,26 @@ contract SocialisedCdp {
 
     function _mint(address _account, uint256 _amount) internal {
         usdCorrections[_account] = usdCorrections[_account]
-          .sub(correctionPerUsd.mul(_toInt256Safe(_amount)));
+          .sub(correctionPerUsd.mul(_toInt256(_amount)));
     }
 
     function _burn(address _account, uint256 _amount) internal {
         usdCorrections[_account] = usdCorrections[_account]
-          .add(correctionPerUsd.mul(_toInt256Safe(_amount)));
+          .add(correctionPerUsd.mul(_toInt256(_amount)));
     }
 
-    function _toInt256Safe(uint256 a) internal pure returns (int256) {
+    function _toInt256(uint256 a) internal pure returns (int256) {
         int256 b = int256(a);
         require(b >= 0);
         return b;
     }
+
+    function _toUint256(int256 a) internal pure returns (uint256) {
+        if (a >= 0) {
+            return uint256(a);
+        } else {
+            return uint256(-a);
+        }
+    }
+
 }
