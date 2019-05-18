@@ -46,7 +46,7 @@ contract SocialisedCdp {
     // Mapping from CDP to start time of CDP liquidation auction
     mapping (address => uint256) public bidStart;
     // Length of a CDP auction
-    uint256 public auctionLength = 60 * 60; // 1 hour
+    uint256 public auctionLength = 30; //60 * 60; // 1 hour
 
     // Used to manage dust when distributing liquidation "dividends"
     int256 constant internal magnitude = 2**128;
@@ -131,7 +131,7 @@ contract SocialisedCdp {
         if (bidStart[_account] == 0) {
             bidStart[_account] = now;
         }
-        require(bidStart[_account].add(auctionLength) >= now.add(auctionLength));
+        require(bidStart[_account].add(auctionLength) >= now);
         //Only one bid per address for simplicity
         require(submittedBids[_account][msg.sender] == 0);
         require(_amount > bestBid[_account]);
@@ -144,7 +144,7 @@ contract SocialisedCdp {
     function executeMarginCall(address _account) external {
         require(winningBidder[_account] == msg.sender);
         require(submittedBids[_account][msg.sender] > 0);
-        require(bidStart[_account].add(auctionLength) < now.add(auctionLength));
+        require(bidStart[_account].add(auctionLength) < now);
 
         // Calculate liquidity difference
         int256 credit = _toInt256(submittedBids[_account][msg.sender]).sub(_toInt256(usdWithdrawn[_account]));
@@ -174,8 +174,7 @@ contract SocialisedCdp {
     }
 
     function _getUsdPrice() internal view returns (uint256) {
-        return 200*10**18;
-        /* return oracle.getPrice(); */
+        return oracle.getPrice();
     }
 
     function _mint(address _account, uint256 _amount) internal {

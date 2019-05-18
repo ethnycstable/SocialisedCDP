@@ -1,6 +1,6 @@
 var SocialisedCdp = artifacts.require("./SocialisedCdp.sol");
 var DummyOracle = artifacts.require("./DummyOracle.sol");
-var MakerDaoOracle = artifacts.require("./MakerDaoOracle.sol");
+// var MakerDaoOracle = artifacts.require("./MakerDaoOracle.sol");
 var UsdToken = artifacts.require("./UsdToken.sol");
 
 module.exports = async function(deployer) {
@@ -10,5 +10,5 @@ module.exports = async function(deployer) {
     let usdToken = await UsdToken.deployed();
     let oracle = await DummyOracle.deployed();
     await usdToken.setCdp(SocialisedCdp.address);
-    await oracle.setPrice(200*10**18);
+    // await oracle.setPrice(200*10**18);
 };
