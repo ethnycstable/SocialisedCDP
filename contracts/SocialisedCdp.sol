@@ -5,42 +5,53 @@ import "./SafeMathInt.sol";
 import "./UsdToken.sol";
 import "./IOracle.sol";
 
-contract CDP {
+// Any account can create a CDP by deposting ETH and minting USD tokens
+// USD tokens can only be minted up to the collateralisation ratio
+// If a CDP  falls below the liquidation ratio (e.g. ETH / USD falls) then the CDP goes up for auction
+// Once the CDP auction completes any credit / deficit is socialised across all USD CDP issuances
+// For example, if a CDP owes 200 USD and the auction only raises 150 USD, then a small amount is added to every CDPs USD deficit, proportionally to their USD drawdowns, such that the sum is 50 USD.
+// If a CDP owes 100 USD and the auction raises 200 USD, then 100 USD is debited from all CDP USD deficits proportionally to USD drawdowns.
+
+// Some assumptions to simplify accounting:
+// 1. Once an account has been liquidated it can no longer interact with the system
+// 2. When a CDP is being auctioned, each account can only bid once per CDP
+
+contract SocialisedCdp {
     using SafeMath for uint256;
     using SafeMathInt for int256;
 
+    // Ratio at which USD tokens can be drawn against ETH collateral
+    uint256 public constant collateralRatio = 66*10**16;
+    // Ratio after which CDP can be liquidated
+    uint256 public constant liquidationRatio = 90*10**16;
+
     // Oracle to use for USD / ETH prices
     IOracle public oracle;
-
-    // Issued USD stable coin
+    // USD stable coin
     UsdToken public usdToken;
 
     // ETH deposited
     mapping (address => uint256) public ethCollateral;
-    // USD withdrawn
+    // USD withdrawn through usdToken
     mapping (address => uint256) public usdWithdrawn;
+    // +ve / -ve correction for usdWithdrawn based on liquidations
+    mapping (address => int256) public usdCorrections;
 
     // Mapping from CDP to best bid on that CDP
     mapping (address => uint256) public bestBid;
-
     // Mapping from CDP to bidders and their submitted bids
     mapping (address => mapping (address => uint256)) public submittedBids;
-
+    // Mapping from CDP to bidder with current highest bid
     mapping (address => address) public winningBidder;
-
+    // Mapping from CDP to start time of CDP liquidation auction
     mapping (address => uint256) public bidStart;
-
-    uint256 public collateralRatio = 66*10**16; //percentage multiplied by 10^16 - i.e. 100% = 10^18
-    uint256 public liquidationRatio = 90*10**16; //percentage multiplied by 10^16 - i.e. 100% = 10^18
-
+    // Length of a CDP auction
     uint256 public auctionLength = 60 * 60; // 1 hour
 
+    // Used to manage dust when distributing liquidation "dividends"
     int256 constant internal magnitude = 2**128;
-
-    int256 public magnifiedCreditPerUsd;
-
-    mapping(address => int256) public magnifiedCreditCorrections;
-    /* mapping(address => uint256) internal withdrawnDividends; */
+    // Correction (per USD) from liquidation "dividends"
+    int256 public correctionPerUsd;
 
     constructor (address _oracle, address _usdToken) public {
         /* collateralRatio = _collateralRatio;
@@ -53,11 +64,11 @@ contract CDP {
         if (_amount == 0) return;
         require(usdToken.totalSupply() > 0);
         if (_amount >= 0) {
-            magnifiedCreditPerUsd = magnifiedCreditPerUsd.add(
+            correctionPerUsd = correctionPerUsd.add(
               _amount.mul(magnitude) / _toInt256Safe(usdToken.totalSupply())
             );
         } else {
-            magnifiedCreditPerUsd = magnifiedCreditPerUsd.sub(
+            correctionPerUsd = correctionPerUsd.sub(
               _amount.mul(magnitude) / _toInt256Safe(usdToken.totalSupply())
             );
         }
@@ -149,13 +160,13 @@ contract CDP {
     }
 
     function _mint(address _account, uint256 _amount) internal {
-        magnifiedCreditCorrections[_account] = magnifiedCreditCorrections[_account]
-          .sub(magnifiedCreditPerUsd.mul(_toInt256Safe(_amount)));
+        usdCorrections[_account] = usdCorrections[_account]
+          .sub(correctionPerUsd.mul(_toInt256Safe(_amount)));
     }
 
     function _burn(address _account, uint256 _amount) internal {
-        magnifiedCreditCorrections[_account] = magnifiedCreditCorrections[_account]
-          .add(magnifiedCreditPerUsd.mul(_toInt256Safe(_amount)));
+        usdCorrections[_account] = usdCorrections[_account]
+          .add(correctionPerUsd.mul(_toInt256Safe(_amount)));
     }
 
     function _toInt256Safe(uint256 a) internal pure returns (int256) {
