@@ -60,6 +60,9 @@ contract SocialisedCdp {
         usdToken = UsdToken(_usdToken);
     }
 
+    // Distributes +ve / -ve credits from liquidations
+    // +ve: a credit (i.e. liquidation happened above debt owed)
+    // -ve: a debit (i.e. liquidation didn't cover debt owed)
     function _manageCredit(int256 _amount) internal {
         if (_amount == 0) return;
         require(usdToken.totalSupply() > 0);
@@ -74,17 +77,19 @@ contract SocialisedCdp {
         }
     }
 
+    // Calculate amount of credit for a particular account (CDP)
+    function accumulatedCredit(address _account) public view returns (int256) {
+        return correctionPerUsd.mul(_toInt256(totalUsdOwed(_account)))
+            .add(usdCorrections[_account]) / magnitude;
+    }
+
+    // Total USD owed to the CDP from combined drawndowns and credits
     function totalUsdOwed(address _account) public view returns (uint256) {
         if (accumulatedCredit(_account) >= 0) {
             return usdWithdrawn[_account].sub(_toUint256(accumulatedCredit(_account)));
         } else {
             return usdWithdrawn[_account].add(_toUint256(accumulatedCredit(_account)));
         }
-    }
-
-    function accumulatedCredit(address _account) public view returns (int256) {
-        return correctionPerUsd.mul(_toInt256(totalUsdOwed(_account)))
-            .add(usdCorrections[_account]) / magnitude;
     }
 
     function depositEth() payable external {
