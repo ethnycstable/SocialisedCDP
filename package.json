@@ -1,0 +1,23 @@
+{
+  "name": "socialisedcdp",
+  "version": "1.0.0",
+  "description": "Over-collateralised stable coins with socialised liquidation",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ethnycstable/SocialisedCDP.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ethnycstable/SocialisedCDP/issues"
+  },
+  "homepage": "https://github.com/ethnycstable/SocialisedCDP#readme",
+  "dependencies": {
+    "openzeppelin-solidity": "^2.2.0",
+    "truffle": "^5.0.18"
+  }
+}
