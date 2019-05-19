@@ -29,6 +29,8 @@ contract SocialisedCdp {
     IOracle public oracle;
     // USD stable coin
     UsdToken public usdToken;
+    // Total outstanding Usd debt
+    uint256 public outstandingUsd;
 
     // ETH deposited
     mapping (address => uint256) public ethCollateral;
@@ -46,7 +48,7 @@ contract SocialisedCdp {
     // Mapping from CDP to start time of CDP liquidation auction
     mapping (address => uint256) public bidStart;
     // Length of a CDP auction
-    uint256 public auctionLength = 30; //60 * 60; // 1 hour
+    uint256 public auctionLength = 0; //60 * 60; // 1 hour
 
     // Used to manage dust when distributing liquidation "dividends"
     int256 constant internal magnitude = 2**128;
@@ -65,14 +67,14 @@ contract SocialisedCdp {
     // -ve: a debit (i.e. liquidation didn't cover debt owed)
     function _manageCredit(int256 _amount) internal {
         if (_amount == 0) return;
-        require(usdToken.totalSupply() > 0);
+        require(outstandingUsd > 0);
         if (_amount >= 0) {
             correctionPerUsd = correctionPerUsd.add(
-              _amount.mul(magnitude) / _toInt256(usdToken.totalSupply())
+              _amount.mul(magnitude) / _toInt256(outstandingUsd)
             );
         } else {
             correctionPerUsd = correctionPerUsd.sub(
-              _amount.mul(magnitude) / _toInt256(usdToken.totalSupply())
+              _amount.mul(magnitude) / _toInt256(outstandingUsd)
             );
         }
     }
@@ -103,7 +105,6 @@ contract SocialisedCdp {
         require(bidStart[msg.sender] == 0);
         //Will revert if transfer fails, or we try and pay back more than we've borrowed
         usdWithdrawn[msg.sender] = usdWithdrawn[msg.sender].sub(_amount);
-        require(usdToken.burnFrom(msg.sender, _amount));
         _burn(msg.sender, _amount);
     }
 
@@ -119,7 +120,6 @@ contract SocialisedCdp {
         require(bidStart[msg.sender] == 0);
         usdWithdrawn[msg.sender] = usdWithdrawn[msg.sender].add(_amount);
         require(_checkLiquidity(msg.sender));
-        require(usdToken.mint(msg.sender, _amount));
         _mint(msg.sender, _amount);
     }
 
@@ -147,8 +147,10 @@ contract SocialisedCdp {
         require(bidStart[_account].add(auctionLength) < now);
 
         // Calculate liquidity difference
-        int256 credit = _toInt256(submittedBids[_account][msg.sender]).sub(_toInt256(usdWithdrawn[_account]));
+        int256 credit = _toInt256(submittedBids[_account][msg.sender]).sub(_toInt256(totalUsdOwed(_account)));
         msg.sender.transfer(ethCollateral[_account]);
+        require(usdToken.burnFrom(address(this), submittedBids[_account][msg.sender]));
+        outstandingUsd = outstandingUsd.sub(totalUsdOwed(_account));
         submittedBids[_account][msg.sender] = 0;
         ethCollateral[_account] = 0;
         usdWithdrawn[_account] = 0;
@@ -178,13 +180,17 @@ contract SocialisedCdp {
     }
 
     function _mint(address _account, uint256 _amount) internal {
+        require(usdToken.mint(_account, _amount));
         usdCorrections[_account] = usdCorrections[_account]
           .sub(correctionPerUsd.mul(_toInt256(_amount)));
+        outstandingUsd = outstandingUsd.add(_amount);
     }
 
     function _burn(address _account, uint256 _amount) internal {
+        require(usdToken.burnFrom(_account, _amount));
         usdCorrections[_account] = usdCorrections[_account]
           .add(correctionPerUsd.mul(_toInt256(_amount)));
+        outstandingUsd = outstandingUsd.sub(_amount);
     }
 
     function _toInt256(uint256 a) internal pure returns (int256) {

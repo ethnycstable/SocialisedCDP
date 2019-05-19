@@ -25,7 +25,7 @@ module.exports = async function(deployer, network, accounts) {
     await oracle.setPrice(new BigNumber(100*10**18));
     await usdToken.approve(SocialisedCdp.address, new BigNumber(10*10**18), {from: accounts[1]});
     console.log("Bid");
-    let allowance = await usdToken.allowance(accounts[1], SocialisedCdp.address);
-    console.log(allowance.toString());
     await cdp.bidMarginCall(accounts[0], new BigNumber(10*10**18), {from: accounts[1]});
+    console.log("Execute");
+    //await cdp.executeMarginCall(accounts[0], {from: accounts[1]});
 };

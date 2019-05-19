@@ -27,6 +27,7 @@ contract UsdToken is ERC20 {
 
     function burnFrom(address from, uint256 value) external onlyCdp returns (bool) {
         _burn(from, value);
+        return true;
     }
 
 }
